@@ -1657,8 +1657,8 @@ LogicalResult TypeConverter::convertType(Type t,
                                          SmallVectorImpl<Type> &results) {
   // Walk the added converters in reverse order to apply the most recently
   // registered first.
-  for (ConversionCallbackFn &converter : llvm::reverse(conversions))
-    if (Optional<LogicalResult> result = converter(t, results))
+  for (auto &pattern : llvm::reverse(patterns))
+    if (Optional<LogicalResult> result = pattern->convertType(t, results))
       return *result;
   return failure();
 }

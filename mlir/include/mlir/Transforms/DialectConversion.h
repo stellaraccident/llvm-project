@@ -14,6 +14,7 @@
 #define MLIR_TRANSFORMS_DIALECTCONVERSION_H_
 
 #include "mlir/IR/PatternMatch.h"
+#include "mlir/IR/TypeConversion.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/MapVector.h"
@@ -91,6 +92,16 @@ public:
     SmallVector<Type, 4> argTypes;
   };
 
+  /// Gets the underlying patterns.
+  OwningTypeConversionPatternList &getPatterns() {
+    return patterns;
+  }
+
+  /// Gets the underlying patterns.
+  const OwningTypeConversionPatternList &getPatterns() const {
+    return patterns;
+  }
+
   /// Register a conversion function. A conversion function must be convertible
   /// to any of the following forms(where `T` is a class derived from `Type`:
   ///   * Optional<Type>(T)
@@ -110,7 +121,7 @@ public:
   template <typename FnT,
             typename T = typename FunctionTraits<FnT>::template arg_t<0>>
   void addConversion(FnT &&callback) {
-    registerConversion(wrapCallback<T>(std::forward<FnT>(callback)));
+    patterns.insertExisting(wrapCallback<T>(std::forward<FnT>(callback)));
   }
 
   /// Convert the given type. This function should return failure if no valid
@@ -162,50 +173,57 @@ public:
   }
 
 private:
-  /// The signature of the callback used to convert a type. If the new set of
-  /// types is empty, the type is removed and any usages of the existing value
-  /// are expected to be removed during conversion.
-  using ConversionCallbackFn =
-      std::function<Optional<LogicalResult>(Type, SmallVectorImpl<Type> &)>;
-
   /// Generate a wrapper for the given callback. This allows for accepting
   /// different callback forms, that all compose into a single version.
   /// With callback of form: `Optional<Type>(T)`
   template <typename T, typename FnT>
-  std::enable_if_t<is_invocable<FnT, T>::value, ConversionCallbackFn>
+  std::enable_if_t<is_invocable<FnT, T>::value,
+                   std::unique_ptr<TypeConversionPattern>>
   wrapCallback(FnT &&callback) {
-    return wrapCallback<T>([callback = std::forward<FnT>(callback)](
-                               T type, SmallVectorImpl<Type> &results) {
-      if (Optional<Type> resultOpt = callback(type)) {
-        bool wasSuccess = static_cast<bool>(resultOpt.getValue());
-        if (wasSuccess)
-          results.push_back(resultOpt.getValue());
-        return Optional<LogicalResult>(success(wasSuccess));
+    struct SingleTypePattern : public TypeConversionPattern {
+      SingleTypePattern(FnT callback) : callback(std::move(callback)) {}
+      Optional<LogicalResult>
+      convertType(Type sourceType,
+                  SmallVectorImpl<Type> &targetTypeResults) const override {
+        T derivedType = sourceType.dyn_cast<T>();
+        if (!derivedType)
+          return llvm::None;
+        if (Optional<Type> resultOpt = callback(derivedType)) {
+          bool wasSuccess = static_cast<bool>(resultOpt.getValue());
+          if (wasSuccess)
+            targetTypeResults.push_back(resultOpt.getValue());
+          return Optional<LogicalResult>(success(wasSuccess));
+        }
+        return Optional<LogicalResult>();
       }
-      return Optional<LogicalResult>();
-    });
+      FnT callback;
+    };
+
+    return std::make_unique<SingleTypePattern>(std::move(callback));
   }
   /// With callback of form: `Optional<LogicalResult>(T, SmallVectorImpl<> &)`
   template <typename T, typename FnT>
-  std::enable_if_t<!is_invocable<FnT, T>::value, ConversionCallbackFn>
+  std::enable_if_t<!is_invocable<FnT, T>::value,
+                   std::unique_ptr<TypeConversionPattern>>
   wrapCallback(FnT &&callback) {
-    return [callback = std::forward<FnT>(callback)](
-               Type type,
-               SmallVectorImpl<Type> &results) -> Optional<LogicalResult> {
-      T derivedType = type.dyn_cast<T>();
-      if (!derivedType)
-        return llvm::None;
-      return callback(derivedType, results);
+    struct MultiTypePattern : public TypeConversionPattern {
+      MultiTypePattern(FnT callback) : callback(std::move(callback)) {}
+      Optional<LogicalResult>
+      convertType(Type sourceType,
+                  SmallVectorImpl<Type> &targetTypeResults) const override {
+        T derivedType = sourceType.dyn_cast<T>();
+        if (!derivedType)
+          return llvm::None;
+        return callback(derivedType, targetTypeResults);
+      }
+      FnT callback;
     };
-  }
 
-  /// Register a type conversion.
-  void registerConversion(ConversionCallbackFn callback) {
-    conversions.emplace_back(std::move(callback));
+    return std::make_unique<MultiTypePattern>(std::move(callback));
   }
 
   /// The set of registered conversion functions.
-  SmallVector<ConversionCallbackFn, 4> conversions;
+  OwningTypeConversionPatternList patterns;
 };
 
 //===----------------------------------------------------------------------===//
