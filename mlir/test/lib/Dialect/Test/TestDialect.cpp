@@ -8,6 +8,7 @@
 
 #include "TestDialect.h"
 #include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/Function.h"
 #include "mlir/IR/Module.h"
 #include "mlir/IR/PatternMatch.h"
@@ -124,6 +125,102 @@ struct TestInlinerInterface : public DialectInlinerInterface {
 } // end anonymous namespace
 
 //===----------------------------------------------------------------------===//
+// Test types
+//===----------------------------------------------------------------------===//
+
+namespace TestTypes {
+enum Kind {
+  WithTraitType = Type::FIRST_PRIVATE_EXPERIMENTAL_1_TYPE,
+  LAST_TYPE = WithTraitType,
+};
+} // namespace TestTypes
+
+/// TODO: Move to Types.h
+template <typename ConcreteType, template <typename> class TraitType>
+class TypeTraitBase {
+protected:
+
+};
+
+/// TODO: Move to Types.h
+template <typename ConcreteTypeInterface, typename Traits>
+class TypeInterface {
+public:
+  using Concept = typename Traits::Concept;
+  template <typename T> using Model = typename Traits::template Model<T>;
+
+  TypeInterface(Type t = nullptr)
+    : impl(t ? getInterfaceFor(t) : nullptr) {
+    assert(impl && "could not instantiate type interface");
+  }
+
+  /// Support 'classof' by checking if the given operation defines the concrete
+  /// interface.
+  static bool classof(Type t);
+
+  /// Define an accessor for the ID of this interface.
+  static TypeID getInterfaceID() { 
+    return TypeID::get<ConcreteTypeInterface>(); 
+  }
+
+  template <typename ConcreteType>
+  struct Trait : TypeTraitBase<ConcreteType, Trait> {
+    static Concept &instance() {
+      static Model<ConcreteType> singleton;
+      return singleton;
+    }
+  };
+
+protected:
+  /// Get the raw concept in the correct derived concept type.
+  Concept *getImpl() { return impl; }
+
+private:
+  static Concept *getInterfaceFor(Type t) {
+    // TODO: Look up on the type?
+    return nullptr;
+  }
+
+  Concept *impl;
+};
+
+/// Detail traits structure for the Fooworthy type interface.
+struct FooworthyTypeTraits {
+  class Concept {
+  public:
+    virtual ~Concept() = default;
+    virtual LogicalResult isFooworthy(Type type) = 0;
+  };
+  template <typename ConcreteType>
+  class Model : public Concept {
+  public:
+    LogicalResult isFooworthy(Type opaqueType) override {
+      // auto type = llvm::cast<ConcreteType>(opaqueType);
+      // return type.isFooworthy();
+      return failure();
+    }
+  };
+};
+
+class FooworthyTypeInterface : public TypeInterface<
+    FooworthyTypeInterface, FooworthyTypeTraits> {
+  using TypeInterface::TypeInterface;
+};
+
+class WithTraitType : public Type::TypeBase<WithTraitType, Type> {
+public:
+  using Base::Base;
+  static bool kindof(unsigned kind) { 
+    return kind == Type::FIRST_PRIVATE_EXPERIMENTAL_1_TYPE; 
+  }
+  static WithTraitType get(MLIRContext *context) {
+    // Call into a helper 'get' method in 'TypeBase' to get a uniqued instance
+    // of this type.
+    return Base::get(context, TestTypes::WithTraitType);
+  }  
+};
+
+//===----------------------------------------------------------------------===//
 // TestDialect
 //===----------------------------------------------------------------------===//
 
@@ -135,6 +232,7 @@ TestDialect::TestDialect(MLIRContext *context)
       >();
   addInterfaces<TestOpAsmInterface, TestOpFolderDialectInterface,
                 TestInlinerInterface>();
+  addTypes<WithTraitType>();
   allowUnknownOperations();
 }
 
@@ -161,6 +259,26 @@ TestDialect::verifyRegionResultAttribute(Operation *op, unsigned regionIndex,
   if (namedAttr.first == "test.invalid_attr")
     return op->emitError() << "invalid to use 'test.invalid_attr'";
   return success();
+}
+
+Type TestDialect::parseType(DialectAsmParser &parser) const {
+  StringRef keyword;
+  if (parser.parseKeyword(&keyword))
+    return Type();
+  if (keyword == "with_trait")
+    return WithTraitType::get(getContext());
+  parser.emitError(parser.getNameLoc(), "unknown test type");
+  return Type();
+}
+
+void TestDialect::printType(Type type, DialectAsmPrinter &os) const {
+  switch (type.getKind()) {
+  case TestTypes::WithTraitType:
+    os << "with_trait";
+    return;
+  default:
+    llvm_unreachable("unexpected 'basicpy' type kind");
+  }
 }
 
 //===----------------------------------------------------------------------===//

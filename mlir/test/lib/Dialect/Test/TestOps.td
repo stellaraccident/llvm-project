@@ -1309,4 +1309,14 @@ def SideEffectOp : TEST_Op<"side_effect_op",
   let results = (outs AnyType:$result);
 }
 
+//===----------------------------------------------------------------------===//
+// Test types with traits and interfaces
+//===----------------------------------------------------------------------===//
+
+def WithTraitType : DialectType<Test_Dialect,
+    CPred<"$_self.isa<WithTraitType>()">,
+    "Test type with a trait"> {
+  let typeDescription = [{Test type with a trait}];
+}
+
 #endif // TEST_OPS

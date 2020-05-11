@@ -38,7 +38,8 @@ protected:
   /// When using this constructor, the initializeDialect function must be
   /// invoked afterwards for the storage to be valid.
   TypeStorage(unsigned subclassData = 0)
-      : dialect(nullptr), subclassData(subclassData) {}
+      : dialect(nullptr), getRawInterface(nullptr), 
+         subclassData(subclassData) {}
 
 public:
   /// Get the dialect that this type is registered to.
@@ -46,6 +47,16 @@ public:
     assert(dialect && "Malformed type storage object.");
     return *dialect;
   }
+
+  /// Returns an instance of the concept object for the given interface if it
+  /// was registered to this operation, null otherwise.
+  template <typename T>
+  typename T::Concept *getInterface() const {
+    if (!getRawInterface) return nullptr;
+    return static_cast<typename T::Concept *>(
+        (*getRawInterface)(T::getInterfaceID()));
+  }
+
   /// Get the subclass data.
   unsigned getSubclassData() const { return subclassData; }
 
@@ -54,11 +65,24 @@ public:
 
 private:
   // Set the dialect for this storage instance. This is used by the TypeUniquer
-  // when initializing a newly constructed type storage object.
-  void initializeDialect(Dialect &newDialect) { dialect = &newDialect; }
+  // when initializing a newly constructed type storage object. Initializing
+  // these fields after construction keeps implementation details out of
+  // user-constructors.
+  void initializeTypeStorage(
+    Dialect &newDialect, void *(*newGetRawInterface)(TypeID interfaceID)) { 
+      dialect = &newDialect; 
+      getRawInterface = newGetRawInterface;
+    }
 
   /// The dialect for this type.
   Dialect *dialect;
+
+  /// Hook that returns a raw instance of the concept for the given interface
+  /// id if it is registered to this type, nullptr otherwise.
+  /// TODO: This and dialect could be hoisted into an AbstractType instead
+  /// of carried around for each storage instance. Alternatively, the interface
+  /// mapping could be carried on the Dialect itself.
+  void *(*getRawInterface)(TypeID interfaceID);
 
   /// Space for subclasses to store data.
   unsigned subclassData;
@@ -89,7 +113,9 @@ public:
   static T get(MLIRContext *ctx, unsigned kind, Args &&... args) {
     return ctx->getTypeUniquer().get<typename T::ImplType>(
         [&](TypeStorage *storage) {
-          storage->initializeDialect(lookupDialectForType<T>(ctx));
+          storage->initializeTypeStorage(
+            lookupDialectForType<T>(ctx),
+            /*newGetRawInterface=*/ nullptr);
         },
         kind, std::forward<Args>(args)...);
   }
