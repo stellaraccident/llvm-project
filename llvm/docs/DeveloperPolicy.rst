@@ -435,6 +435,102 @@ If you are interested in making a large change, and this scares you, please make
 sure to first `discuss the change/gather consensus`_ then ask about the best way
 to go about making the change.
 
+Incubating New Projects
+-----------------------
+
+As a further mechanism for starting prospective projects, LLVM is piloting an
+incubator process with the intention of providing space for potentially
+valuable, new top-level and sub-projects to reach a critical mass while being
+community and technically aligned closer to day one.
+
+Inspiration for this process was taken from the experiences of successfully
+started sub-projects like
+`MLIR <https://github.com/llvm/llvm-project/tree/master/mlir>`_ and
+`FLANG <https://github.com/llvm/llvm-project/tree/master/flang>`_, both
+of which were started speculatively in the hope of acceptance but not
+aligned with LLVM explicitly from inception.
+
+This process is new, and none of it is set in stone. If something doesn't feel
+right or feels inapplicable, please feel free to discuss it.
+
+Incubating project characteristics
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Will be created under a new git repository within the
+  `LLVM GitHub Organization <https://github.com/llvm>`_.
+
+* Are required to follow the LLVM Developer Policy (this document), coding
+  standards, and Code of Conduct, but can define their own stability and
+  evolution process, code owners, etc.
+
+* Can be started with just a README and charter document (no code is required).
+
+* Developed with an eventual graduation in view to become a dedicated
+  top-level or well-defined sub-project within the
+  `LLVM mono-repo <https://github.com/llvm/llvm-project>`_. Even if details are
+  not clear, it should be possible to imagine such a project eventually
+  existing within the monorepo (both topically and technically).
+
+* Graduation to the mono-repo would follow existing processes and standards
+  for becoming a first-class part of the monorepo.
+
+* Are expected to benefit from early alignment with both the LLVM community
+  and development methodologies so as to both decrease the friction of starting
+  speculative new things and set those up which prove valuable for a more
+  smooth graduation by having them aligned with LLVM closer to their inception.
+
+* Incubating projects can be retired, but the process has not yet been ironed
+  out.
+
+* May have transient states that would make them unsuitable for direct inclusion
+  in the mono-repo (e.g. dependencies that have not yet been factored
+  appropriately, leveraging experimental components or APIs that are not yet
+  upstream, have received community interest but not consensus sufficient to
+  warrant directly becoming a project in the mono-repo, etc).
+
+Requesting to start a new project
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This process is still being piloted and will likely change. In the interim:
+
+* Send an email to the `llvm-dev
+  <http://lists.llvm.org/mailman/listinfo/llvm-dev>`_ email list starting with
+  the subject term "[Incubation Request]", summarize your charter, reference
+  existing discussions, and receive feedback.
+
+* Be prepared to discuss alternatives, which are evaluated by the community on
+  a case by case basis (e.g. starting development directly in the monorepo,
+  doing a lighter weight proof of concept in a personal repo first, etc).
+
+* You will probably be asked about preferences for development methodology
+  (i.e. fork of the mono-repo, out of tree development, etc). In general, the
+  community is interested in converging on some common patterns here, but is
+  still evaluating.
+
+* In the absence of firm objections, please email
+  `llvm-admin <mailto:llvm-admin@lists.llvm.org>`_ to request project creation,
+  referencing the llvm-dev thread. Include the GitHub usernames of the initial
+  collaborators who should be given admin access to the project.
+
+Project policies:
+^^^^^^^^^^^^^^^^^
+
+* The following text must be present at the top of the README and any standalone
+  distribution documents:
+
+      This project is being incubated by the LLVM Foundation and is not part of
+      any official LLVM release. While incubation status is not necessarily a
+      reflection of the completeness or stability of the code, it does indicate
+      that the project has yet to be endorsed as a component of LLVM.
+
+* Incubating projects are encouraged to use existing communication channels,
+  especially while gaining traction. Once dedicated topic channels become
+  helpful, feel free to request a category on the
+  `LLVM Discourse Server <https://llvm.discourse.group/>`_ or a Discord channel.
+
+* Be responsive to community feedback about direction, organization, and issues
+  affecting all LLVM projects (e.g. licensing, documentation layout, etc).
+
 Attribution of Changes
 ----------------------
 
@@ -526,8 +622,8 @@ New Targets
 
 LLVM is very receptive to new targets, even experimental ones, but a number of
 problems can appear when adding new large portions of code, and back-ends are
-normally added in bulk.  We have found that landing large pieces of new code 
-and then trying to fix emergent problems in-tree is problematic for a variety 
+normally added in bulk.  We have found that landing large pieces of new code
+and then trying to fix emergent problems in-tree is problematic for a variety
 of reasons.
 
 For these reasons, new targets are *always* added as *experimental* until
@@ -566,8 +662,8 @@ The basic rules for a back-end to be upstreamed in **experimental** mode are:
 * The target should have either reasonable documentation on how it
   works (ISA, ABI, etc.) or a publicly available simulator/hardware
   (either free or cheap enough) - preferably both.  This allows
-  developers to validate assumptions, understand constraints and review code 
-  that can affect the target. 
+  developers to validate assumptions, understand constraints and review code
+  that can affect the target.
 
 In addition, the rules for a back-end to be promoted to **official** are:
 
