@@ -247,69 +247,41 @@ private:
 };
 
 /// Wrapper around an MlirRegion.
-/// Note that region can exist in a detached state (where this instance is
-/// responsible for clearing) or an attached state (where its owner is
-/// responsible).
-///
-/// This python wrapper retains a redundant reference to its creating context
-/// in order to facilitate checking that parts of the operation hierarchy
-/// are only assembled from the same context.
+/// Regions are managed completely by their containing operation. Unlike the
+/// C++ API, the python API does not support detached regions.
 class PyRegion {
 public:
-  PyRegion(MlirContext context, MlirRegion region, bool detached)
-      : context(context), region(region), detached(detached) {}
-  PyRegion(PyRegion &&other)
-      : context(other.context), region(other.region), detached(other.detached) {
-    other.detached = false;
-  }
-  ~PyRegion() {
-    if (detached)
-      mlirRegionDestroy(region);
-  }
+  PyRegion(PyOperationRef operation, MlirRegion region)
+      : operation(std::move(operation)), region(region) {}
 
-  // Call prior to attaching the region to a parent.
-  // This will transition to the attached state and will throw an exception
-  // if already attached.
-  void attachToParent();
+  MlirRegion get() { return region; }
+  PyOperationRef &getOperation() { return operation; }
 
-  MlirContext context;
-  MlirRegion region;
+  void checkValid() { return operation->checkValid(); }
 
 private:
-  bool detached;
+  PyOperationRef operation;
+  MlirRegion region;
 };
 
 /// Wrapper around an MlirBlock.
-/// Note that blocks can exist in a detached state (where this instance is
-/// responsible for clearing) or an attached state (where its owner is
-/// responsible).
-///
-/// This python wrapper retains a redundant reference to its creating context
-/// in order to facilitate checking that parts of the operation hierarchy
-/// are only assembled from the same context.
+/// Regions are managed completely by their containing operation. Unlike the
+/// C++ API, the python API does not support detached regions.
 class PyBlock {
 public:
-  PyBlock(MlirContext context, MlirBlock block, bool detached)
-      : context(context), block(block), detached(detached) {}
-  PyBlock(PyBlock &&other)
-      : context(other.context), block(other.block), detached(other.detached) {
-    other.detached = false;
-  }
-  ~PyBlock() {
-    if (detached)
-      mlirBlockDestroy(block);
+  PyBlock(PyOperationRef operation, MlirBlock block)
+      : operation(std::move(operation)), block(block) {
+    assert(!mlirBlockIsNull(block) && "python block cannot be null");
   }
 
-  // Call prior to attaching the block to a parent.
-  // This will transition to the attached state and will throw an exception
-  // if already attached.
-  void attachToParent();
+  MlirBlock get() { return block; }
+  PyOperationRef &getOperation() { return operation; }
 
-  MlirContext context;
-  MlirBlock block;
+  void checkValid() { return operation->checkValid(); }
 
 private:
-  bool detached;
+  PyOperationRef operation;
+  MlirBlock block;
 };
 
 /// Wrapper around the generic MlirAttribute.
