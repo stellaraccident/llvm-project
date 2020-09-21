@@ -229,6 +229,10 @@ public:
   }
 
   bool isAttached() { return attached; }
+  void setAttached() {
+    assert(!attached && "operation already attached");
+    attached = true;
+  }
   void checkValid();
 
 private:
