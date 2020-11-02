@@ -30,7 +30,7 @@ PyGlobals::PyGlobals() {
 
 PyGlobals::~PyGlobals() { instance = nullptr; }
 
-void PyGlobals::loadDialectModule(const std::string &dialectNamespace) {
+void PyGlobals::loadDialectModule(llvm::StringRef dialectNamespace) {
   if (loadedDialectModules.contains(dialectNamespace))
     return;
   // Since re-entrancy is possible, make a copy of the search prefixes.
@@ -38,7 +38,7 @@ void PyGlobals::loadDialectModule(const std::string &dialectNamespace) {
   py::object loaded;
   for (std::string moduleName : localSearchPrefixes) {
     moduleName.push_back('.');
-    moduleName.append(dialectNamespace);
+    moduleName.append(dialectNamespace.data(), dialectNamespace.size());
 
     try {
       loaded = py::module::import(moduleName.c_str());
@@ -69,7 +69,8 @@ void PyGlobals::registerDialectImpl(const std::string &dialectNamespace,
 }
 
 void PyGlobals::registerOperationImpl(const std::string &operationName,
-                                      py::object pyClass, py::object rawClass) {
+                                      py::object pyClass,
+                                      py::object rawOpViewClass) {
   py::object &found = operationClassMap[operationName];
   if (found) {
     throw SetPyError(PyExc_RuntimeError, llvm::Twine("Operation '") +
@@ -77,7 +78,7 @@ void PyGlobals::registerOperationImpl(const std::string &operationName,
                                              "' is already registered.");
   }
   found = std::move(pyClass);
-  rawOperationClassMap[operationName] = std::move(rawClass);
+  rawOpViewClassMap[operationName] = std::move(rawOpViewClass);
 }
 
 llvm::Optional<py::object>
@@ -95,6 +96,40 @@ PyGlobals::lookupDialectClass(const std::string &dialectNamespace) {
   // Not found and loading did not yield a registration. Negative cache.
   dialectClassMap[dialectNamespace] = py::none();
   return llvm::None;
+}
+
+llvm::Optional<pybind11::object>
+PyGlobals::lookupRawOpViewClass(llvm::StringRef operationName) {
+  {
+    auto foundIt = rawOpViewClassMap.find(operationName);
+    if (foundIt != rawOpViewClassMap.end()) {
+      if (foundIt->second.is_none())
+        return llvm::None;
+      assert(foundIt->second && "py::object is defined");
+      return foundIt->second;
+    }
+  }
+
+  // Not found. Load the dialect namespace.
+  auto split = operationName.split('.');
+  llvm::StringRef dialectNamespace = split.first;
+  loadDialectModule(dialectNamespace);
+
+  // Attempt to find again and negative cache if not found.
+  {
+    auto foundIt = rawOpViewClassMap.find(operationName);
+
+    if (foundIt != rawOpViewClassMap.end()) {
+      if (foundIt->second.is_none())
+        return llvm::None;
+      assert(foundIt->second && "py::object is defined");
+      return foundIt->second;
+    }
+
+    // Negative cache.
+    rawOpViewClassMap[operationName] = py::none();
+    return llvm::None;
+  }
 }
 
 // -----------------------------------------------------------------------------

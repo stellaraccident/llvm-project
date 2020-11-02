@@ -48,7 +48,7 @@ public:
   /// Note that this returns void because it is expected that the module
   /// contains calls to decorators and helpers that register the salient
   /// entities.
-  void loadDialectModule(const std::string &dialectNamespace);
+  void loadDialectModule(llvm::StringRef dialectNamespace);
 
   /// Decorator for registering a custom Dialect class. The class object must
   /// have a DIALECT_NAMESPACE attribute.
@@ -65,12 +65,17 @@ public:
   /// This is intended to be called by implementation code.
   void registerOperationImpl(const std::string &operationName,
                              pybind11::object pyClass,
-                             pybind11::object rawClass);
+                             pybind11::object rawOpViewClass);
 
   /// Looks up a registered dialect class by namespace. Note that this may
   /// trigger loading of the defining module and can arbitrarily re-enter.
   llvm::Optional<pybind11::object>
   lookupDialectClass(const std::string &dialectNamespace);
+
+  /// Looks up a registered raw OpView class by operation name. Note that this
+  /// may trigger a load of the dialect, which can arbitrarily re-enter.
+  llvm::Optional<pybind11::object>
+  lookupRawOpViewClass(llvm::StringRef operationName);
 
 private:
   static PyGlobals *instance;
@@ -85,7 +90,7 @@ private:
   llvm::StringMap<pybind11::object> operationClassMap;
   /// Map of operation name to custom subclass that directly initializes
   /// the OpView base class (bypassing the user class constructor).
-  llvm::StringMap<pybind11::object> rawOperationClassMap;
+  llvm::StringMap<pybind11::object> rawOpViewClassMap;
 };
 
 } // namespace python
