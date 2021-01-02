@@ -32,6 +32,10 @@ add_llvm_component_library(LLVMOrcJIT
   intrinsics_gen
 
   LINK_COMPONENTS
+  Analysis
+  BitReader
+  BitWriter
+  Passes
   Core
   ExecutionEngine
   JITLink
@@ -49,10 +53,10 @@ add_llvm_component_library(LLVMOrcJIT
 add_subdirectory(Shared)
 add_subdirectory(TargetProcess)
 
-target_link_libraries(LLVMOrcJIT
-  PRIVATE
-  LLVMAnalysis
-  LLVMBitReader
-  LLVMBitWriter
-  LLVMPasses
-  )
+# target_link_libraries(LLVMOrcJIT
+#   PRIVATE
+#   LLVMAnalysis
+#   LLVMBitReader
+#   LLVMBitWriter
+#   LLVMPasses
+#   )

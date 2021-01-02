@@ -18,8 +18,12 @@ add_llvm_component_library(LLVMX86Desc
   MC
   MCDisassembler
   Support
-  X86Info
+  # TODO: Intra-component linkage needs to be via LINK_LIBS, not LINK_COMPONENTS
+  # X86Info
   BinaryFormat
+
+  LINK_LIBS PRIVATE
+  LLVMX86Info
 
   ADD_TO_COMPONENT
   X86

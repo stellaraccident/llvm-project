@@ -24,10 +24,10 @@ add_llvm_component_library(LLVMJITLink
   OrcTargetProcess
   Support
   )
- 
-target_link_libraries(LLVMJITLink
-  PRIVATE
-  LLVMObject
-  LLVMOrcTargetProcess
-  LLVMSupport
-)
+
+# target_link_libraries(LLVMJITLink
+#   PRIVATE
+#   LLVMObject
+#   LLVMOrcTargetProcess
+#   LLVMSupport
+# )

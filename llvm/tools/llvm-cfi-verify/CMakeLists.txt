@@ -15,4 +15,7 @@ add_llvm_tool(llvm-cfi-verify
   )
 
 add_subdirectory(lib)
+# TODO: Can be dynamic linked once LLVMCFIVerify is converted to a component
+# library.
+set_target_properties(llvm-cfi-verify PROPERTIES LLVM_LINK_STATIC ON)
 target_link_libraries(llvm-cfi-verify PRIVATE LLVMCFIVerify)

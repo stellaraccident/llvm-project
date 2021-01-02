@@ -12,7 +12,8 @@ add_llvm_component_library(LLVMFrontendOpenACC
   DEPENDS
   acc_gen
   acc_cpp
-)
 
-target_link_libraries(LLVMFrontendOpenACC LLVMSupport)
+  LINK_COMPONENTS
+  Support
+)
 

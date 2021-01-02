@@ -408,6 +408,9 @@ endfunction(set_windows_version_resource_properties)
 #      This is used to specify that this is a component library of
 #      LLVM which means that the source resides in llvm/lib/ and it is a
 #      candidate for inclusion into libLLVM.so.
+#   PARTIAL_SOURCES_INTENDED
+#      If present, then this library is expected to not consume all source
+#      files in a directory, and the corresponding checks are disabled.
 #   )
 function(llvm_add_library name)
   cmake_parse_arguments(ARG
@@ -423,7 +426,9 @@ function(llvm_add_library name)
   if(ARG_OBJLIBS)
     set(ALL_FILES ${ARG_OBJLIBS})
   else()
-    llvm_process_sources(ALL_FILES ${ARG_UNPARSED_ARGUMENTS} ${ARG_ADDITIONAL_HEADERS})
+    llvm_process_sources(ALL_FILES
+      ${ARG_PARTIAL_SOURCES_INTENDED}
+      ${ARG_UNPARSED_ARGUMENTS} ${ARG_ADDITIONAL_HEADERS})
   endif()
 
   if(ARG_MODULE)
@@ -488,6 +493,18 @@ function(llvm_add_library name)
           add_dependencies(${obj_name} ${link_lib})
         endif()
       endforeach()
+      # TODO: See if we can get this check working.
+      # foreach(link_lib ${LINK_LIBS_ARG_PUBLIC} ${LINK_LIBS_ARG_PRIVATE})
+      #   if(TARGET ${link_lib})
+      #     get_target_property(_library_is_component ${link_lib} LLVM_LIBRARY_IS_NEWCOMPONENT)
+      #     if(_library_is_component)
+      #       message(SEND_ERROR
+      #         "Cannot LINK_LIBS to a library that is part of a component. "
+      #         "Add it to LINK_COMPONENTS or reference it via llvm-component:: "
+      #         "(or if using within a component, add it via LINK_LIBS_INTERNAL.")
+      #     endif()
+      #   endif()
+      # endforeach()
     endif()
   endif()
 
@@ -615,12 +632,19 @@ function(llvm_add_library name)
     set(llvm_libs ${ARG_PLUGIN_TOOL})
   elseif (NOT ARG_COMPONENT_LIB)
     if (LLVM_LINK_LLVM_DYLIB AND NOT ARG_DISABLE_LLVM_LINK_LLVM_DYLIB)
+      message(STATUS "!!!! ERROR !!! ROBOT DISASSEMBLED")
       set(llvm_libs LLVM)
     else()
+      # TODO: Unify this mapping of components to targets.
+      # set(llvm_libs ${ARG_LINK_COMPONENTS} ${LLVM_LINK_COMPONENTS})
+      # list(TRANSFORM llvm_libs PREPEND "llvm-component::LLVM")
+      # message(STATUS "  : Mapped component libs ${name} -> ${llvm_libs}")
+      #set(llvm-libs llvm-component::LLVMSupport)
       llvm_map_components_to_libnames(llvm_libs
        ${ARG_LINK_COMPONENTS}
        ${LLVM_LINK_COMPONENTS}
        )
+      list(TRANSFORM llvm_libs PREPEND "llvm-component::")
     endif()
   else()
     # Components have not been defined explicitly in CMake, so add the
@@ -630,6 +654,7 @@ function(llvm_add_library name)
     # It would be nice to verify that we have the dependencies for this library
     # name, but using get_property(... SET) doesn't suffice to determine if a
     # property has been set to an empty value.
+    message(STATUS "!!!! ERROR !!! ROBOT DISASSEMBLED")
     set_property(TARGET ${name} PROPERTY LLVM_LINK_COMPONENTS ${ARG_LINK_COMPONENTS} ${LLVM_LINK_COMPONENTS})
 
     # These two properties are internal properties only used to make sure the
@@ -724,13 +749,20 @@ endfunction()
 # to link extra component into an existing group.
 function(add_llvm_component_group name)
   cmake_parse_arguments(ARG "HAS_JIT" "" "LINK_COMPONENTS" ${ARGN})
-  add_custom_target(${name})
-  if(ARG_HAS_JIT)
-    set_property(TARGET ${name} PROPERTY COMPONENT_HAS_JIT ON)
-  endif()
-  if(ARG_LINK_COMPONENTS)
-    set_property(TARGET ${name} PROPERTY LLVM_LINK_COMPONENTS ${ARG_LINK_COMPONENTS})
-  endif()
+
+  set(_component_name ${name})
+  llvm_component_create_dummy_source(_dummy_file ${name}_Group)
+  llvm_component_add_library(${name}
+    EXCLUDE_FROM_ALL PARTIAL_SOURCES_INTENDED
+    ADD_TO_COMPONENT ${_component_name}
+    ${_dummy_file}
+    ${ARG_UNPARSED_ARGUMENTS}
+    LINK_COMPONENTS ${ARG_LINK_COMPONENTS})
+
+  # TODO: FIX ME! (or delete - nothing seems to reference?)
+  # if(ARG_HAS_JIT)
+  #   set_property(TARGET ${name} PROPERTY COMPONENT_HAS_JIT ON)
+  # endif()
 endfunction()
 
 # An LLVM component is a cmake target with the following cmake properties
@@ -748,18 +780,99 @@ function(add_llvm_component_library name)
     "COMPONENT_NAME;ADD_TO_COMPONENT"
     ""
     ${ARGN})
-  add_llvm_library(${name} COMPONENT_LIB ${ARG_UNPARSED_ARGUMENTS})
-  string(REGEX REPLACE "^LLVM" "" component_name ${name})
-  set_property(TARGET ${name} PROPERTY LLVM_COMPONENT_NAME ${component_name})
 
+  set(_component_name)
   if(ARG_COMPONENT_NAME)
-    set_property(GLOBAL PROPERTY LLVM_COMPONENT_NAME_${ARG_COMPONENT_NAME} ${component_name})
+    # TODO: Why does it need the prefix?
+    set(_component_name LLVM${ARG_COMPONENT_NAME})
+  endif()
+  if(NOT _component_name)
+    set(_component_name ${ARG_ADD_TO_COMPONENT})
+  endif()
+  if(NOT _component_name)
+    # Default to the library name for the component name (i.e LLVMDemangle).
+    set(_component_name ${name})
   endif()
 
-  if(ARG_ADD_TO_COMPONENT)
-    set_property(TARGET ${ARG_ADD_TO_COMPONENT} APPEND PROPERTY LLVM_LINK_COMPONENTS ${component_name})
-  endif()
+  llvm_component_add_library(${name} ADD_TO_COMPONENT ${_component_name}
+    ${ARG_UNPARSED_ARGUMENTS})
 
+  # Usually done by add_llvm_library but managed separately here.
+  # Needed in order to map some component name forms.
+  set_property( GLOBAL APPEND PROPERTY LLVM_LIBS ${name} )
+
+  # if(ARG_ADD_TO_COMPONENT)
+  #   # Add to an existing LLVM component.
+  #   set(_shared_args ADD_TO_SHARED_COMPONENT ${ARG_ADD_TO_COMPONENT})
+  # elseif(ARG_COMPONENT_NAME)
+  #   set(_group_name "LLVM${ARG_COMPONENT_NAME}")
+  #   add_llvm_component_group(${_group_name})
+  #   set(_shared_args ADD_TO_SHARED_COMPONENT ${_group_name})
+  # else()
+  #   # Create a same-named component and add to that.
+  #   set(_shared_args)
+  # endif()
+
+  # llvm_shared_component_add_library(${name}
+  #   ${_shared_args}
+  #   ${ARG_UNPARSED_ARGUMENTS}
+  # )
+
+  # if(NOT LLVM_BUILD_SHARED_COMPONENTS)
+  #   export_llvm_library(${name} ${ARG_UNPARSED_ARGUMENTS})
+  # elseif(NOT ARG_COMPONENT_NAME AND NOT ARG_ADD_TO_COMPONENT)
+  #   # If we just created a new component, export it.
+  #   export_llvm_library(${name} ${ARG_UNPARSED_ARGUMENTS})
+  # endif()
+
+  # TODO: Export/install it if not building shared components.
+
+  # if(LLVM_BUILD_SHARED_COMPONENTS)
+  #   # Building each top-level component as its own shared library.
+  #   if(NOT ARG_ADD_TO_COMPONENT)
+  #     # Library is a top-level component.
+  #     message(STATUS "add_llvm_component_library top-level ${name}")
+  #     add_llvm_library(${name} SHARED
+  #       COMPONENT_LIB
+  #       ${ARG_UNPARSED_ARGUMENTS})
+  #     set_property(TARGET ${name} PROPERTY LLVM_COMPONENT_NAME ${component_name})
+
+  #     if(ARG_COMPONENT_NAME)
+  #       set_property(GLOBAL PROPERTY LLVM_COMPONENT_NAME_${ARG_COMPONENT_NAME} ${component_name})
+  #     endif()
+  #   else()
+  #     message(STATUS "add_llvm_component_library subordinate ${name} ( -> ${ARG_ADD_TO_COMPONENT} )")
+  #     # Library is a subordinate component of a top-level component.
+  #     #set_property(TARGET ${ARG_ADD_TO_COMPONENT} APPEND PROPERTY LLVM_LINK_COMPONENTS ${component_name})
+  #     add_llvm_library(${name} STATIC OBJECT COMPONENT_LIB ${ARG_UNPARSED_ARGUMENTS})
+  #     target_sources(${ARG_ADD_TO_COMPONENT} PUBLIC $<TARGET_OBJECTS:obj.${name}>)
+  #     set_property(TARGET ${name} PROPERTY LLVM_COMPONENT_NAME ${component_name})
+
+  #     if(ARG_COMPONENT_NAME)
+  #       set_property(GLOBAL PROPERTY LLVM_COMPONENT_NAME_${ARG_COMPONENT_NAME} ${component_name})
+  #     endif()
+
+  #     # Now get the LLVM_LINK_COMPONENTS of the subordinate library and add it
+  #     # to the top-level.
+  #     get_property(_child_llvm_link_components TARGET ${name} PROPERTY LLVM_LINK_COMPONENTS)
+  #     message(STATUS "  -> Add child components (to ${ARG_ADD_TO_COMPONENT}) ${_child_llvm_link_components}")
+  #     set_property(TARGET ${ARG_ADD_TO_COMPONENT} APPEND PROPERTY LLVM_LINK_COMPONENTS ${_child_llvm_link_components})
+  #   endif()
+  # else()
+  #   # Not building each component as its own shared library.
+  #   add_llvm_library(
+  #     ${name} COMPONENT_LIB ${ARG_UNPARSED_ARGUMENTS}
+  #   )
+  #   set_property(TARGET ${name} PROPERTY LLVM_COMPONENT_NAME ${component_name})
+
+  #   if(ARG_COMPONENT_NAME)
+  #     set_property(GLOBAL PROPERTY LLVM_COMPONENT_NAME_${ARG_COMPONENT_NAME} ${component_name})
+  #   endif()
+
+  #   if(ARG_ADD_TO_COMPONENT)
+  #     set_property(TARGET ${ARG_ADD_TO_COMPONENT} APPEND PROPERTY LLVM_LINK_COMPONENTS ${component_name})
+  #   endif()
+  # endif()
 endfunction()
 
 macro(add_llvm_library name)
@@ -775,7 +888,15 @@ macro(add_llvm_library name)
   else()
     llvm_add_library(${name} ${ARG_UNPARSED_ARGUMENTS})
   endif()
+  export_llvm_library(${name} ${ARGN})
+endmacro()
 
+macro(export_llvm_library name)
+  cmake_parse_arguments(ARG
+  "SHARED;BUILDTREE_ONLY;MODULE;INSTALL_WITH_TOOLCHAIN"
+  ""
+  ""
+  ${ARGN})
   # Libraries that are meant to only be exposed via the build tree only are
   # never installed and are only exported as a target in the special build tree
   # config file.
@@ -821,7 +942,7 @@ macro(add_llvm_library name)
   else()
     set_target_properties(${name} PROPERTIES FOLDER "Libraries")
   endif()
-endmacro(add_llvm_library name)
+endmacro(export_llvm_library name)
 
 macro(add_llvm_executable name)
   cmake_parse_arguments(ARG
@@ -905,7 +1026,16 @@ macro(add_llvm_executable name)
 
   set(EXCLUDE_FROM_ALL OFF)
   set_output_directory(${name} BINARY_DIR ${LLVM_RUNTIME_OUTPUT_INTDIR} LIBRARY_DIR ${LLVM_LIBRARY_OUTPUT_INTDIR})
-  llvm_config( ${name} ${USE_SHARED} ${LLVM_LINK_COMPONENTS} )
+
+  # TODO: Finish this. Duplicated with llvm_add_library
+  # TODO: Set the LLVM_LINK_STATIC property
+  # llvm_config( ${name} ${USE_SHARED} ${LLVM_LINK_COMPONENTS} )
+  llvm_map_components_to_libnames(llvm_libs
+    ${LLVM_LINK_COMPONENTS}
+    )
+  list(TRANSFORM llvm_libs PREPEND "llvm-component::")
+  target_link_libraries(${name} PRIVATE ${llvm_libs})
+
   if( LLVM_COMMON_DEPENDS )
     add_dependencies( ${name} ${LLVM_COMMON_DEPENDS} )
   endif( LLVM_COMMON_DEPENDS )

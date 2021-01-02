@@ -331,6 +331,9 @@ set(LLVM_EXPERIMENTAL_TARGETS_TO_BUILD ""
 option(BUILD_SHARED_LIBS
   "Build all libraries as shared libraries instead of static" OFF)
 
+option(LLVM_BUILD_SHARED_COMPONENTS
+    "Build each component as a shared library (or DLL)" OFF)
+
 option(LLVM_ENABLE_BACKTRACES "Enable embedding backtraces on crash." ON)
 if(LLVM_ENABLE_BACKTRACES)
   set(ENABLE_BACKTRACES 1)
@@ -927,6 +930,7 @@ endif( ${CMAKE_SYSTEM_NAME} MATCHES SunOS )
 # use export_executable_symbols(target).
 set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 
+include(LLVMComponents)
 include(AddLLVM)
 include(TableGen)
 

@@ -19,6 +19,8 @@ endif()
 
 set(LLVM_EXEGESIS_TARGETS "${LLVM_EXEGESIS_TARGETS} ${TARGETS_TO_APPEND}" PARENT_SCOPE)
 
+# TODO: This can now become a regular component library and if static linkage
+# is desired, LLVM_LINK_STATIC can be given at the executable level.
 add_library(LLVMExegesis
   STATIC
   Analysis.cpp

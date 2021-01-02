@@ -17,6 +17,7 @@ add_llvm_unittest(LLVMExegesisTests
   RegisterValueTest.cpp
   SnippetGeneratorTest.cpp
   )
+set_target_properties(LLVMExegesisTests PROPERTIES LLVM_LINK_STATIC ON)
 target_link_libraries(LLVMExegesisTests PRIVATE LLVMExegesis)
 
 if(LLVM_TARGETS_TO_BUILD MATCHES "X86")

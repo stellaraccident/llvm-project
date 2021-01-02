@@ -302,6 +302,7 @@ namespace {
 
 char FPS::ID = 0;
 
+
 INITIALIZE_PASS_BEGIN(FPS, DEBUG_TYPE, "X86 FP Stackifier",
                       false, false)
 INITIALIZE_PASS_DEPENDENCY(EdgeBundles)

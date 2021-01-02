@@ -1,3 +1,5 @@
+# TODO: Can be converted to a component library and static linkage opted in
+# at the executable level.
 add_library(LLVMCFIVerify
   STATIC
   FileAnalysis.cpp

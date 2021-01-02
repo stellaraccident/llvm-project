@@ -23,6 +23,7 @@ add_llvm_target_unittest(LLVMExegesisX86Tests
   SnippetRepetitorTest.cpp
   TargetTest.cpp
   )
+set_target_properties(LLVMExegesisX86Tests PROPERTIES LLVM_LINK_STATIC ON)
 target_link_libraries(LLVMExegesisX86Tests PRIVATE
   LLVMExegesis
   LLVMExegesisX86)
