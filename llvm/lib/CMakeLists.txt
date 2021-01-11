@@ -48,13 +48,18 @@ add_llvm_component_group(all-targets LINK_COMPONENTS ${LLVM_TARGETS_TO_BUILD})
 add_llvm_component_group(Engine)
 
 # The native target may not be enabled when cross compiling
-if(TARGET ${LLVM_NATIVE_ARCH})
-  add_llvm_component_group(Native LINK_COMPONENTS ${LLVM_NATIVE_ARCH})
-  add_llvm_component_group(NativeCodeGen LINK_COMPONENTS ${LLVM_NATIVE_ARCH}CodeGen)
-else()
-  add_llvm_component_group(Native)
-  add_llvm_component_group(NativeCodeGen)
-endif()
+# if(TARGET ${LLVM_NATIVE_ARCH})
+#   add_llvm_component_group(Native LINK_COMPONENTS ${LLVM_NATIVE_ARCH})
+#   # TODO: FIX ME
+#   add_llvm_component_group(NativeCodeGen LINK_COMPONENTS ${LLVM_NATIVE_ARCH})
+# else()
+#   add_llvm_component_group(Native)
+#   # TODO: FIX ME!
+#   add_llvm_component_group(NativeCodeGen)
+# endif()
+
+add_llvm_component_group(Native LINK_COMPONENTS ${LLVM_NATIVE_ARCH})
+add_llvm_component_group(NativeCodeGen LINK_COMPONENTS ${LLVM_NATIVE_ARCH})
 
 # Component post-processing
 LLVMBuildResolveComponentsLink()

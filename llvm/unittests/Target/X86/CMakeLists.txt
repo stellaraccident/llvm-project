@@ -11,9 +11,11 @@ set(LLVM_LINK_COMPONENTS
   MIRParser
   Support
   Target
-  X86CodeGen
-  X86Desc
-  X86Info
+  X86
+  # TODO: NOT THESE
+  # X86CodeGen
+  # X86Desc
+  # X86Info
   )
 
 add_llvm_unittest(X86Tests

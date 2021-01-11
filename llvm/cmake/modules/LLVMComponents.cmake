@@ -121,9 +121,9 @@
 # to the library `name` passed to `llvm_component_add_library` and
 # `${componentname}` refers to the argument `ADD_TO_COMPONENT`.
 #
-#   * `${libname}`: An object library containing the objects that should be
+#   * `${libname}_impl`: An object library containing the objects that should be
 #     contributed to the component.
-#   * `${componentname}_interface`: INTERFACE library that
+#   * `${componentname}`: INTERFACE library that
 #     `llvm-component::${componentname}` aliases to.
 #   * `${componentname}_props` : Custom property target for the component.
 #   * `${componentname}_shared` (on disk as `${componentname}`) :
@@ -151,7 +151,7 @@ function(llvm_component_add_library name)
   endif()
 
   # The main component implementation (object) library.
-  set(_impl_target ${name})
+  set(_impl_target ${name}_impl)
   llvm_process_sources(_all_src_files
     ${ARG_UNPARSED_ARGUMENTS} ${ARG_ADDITIONAL_HEADERS})
   add_library(${_impl_target} OBJECT EXCLUDE_FROM_ALL
@@ -182,7 +182,7 @@ function(llvm_component_add_library name)
 
   # Get or create the component.
   set(component_props_target ${component_name}_props)
-  set(component_interface_target ${component_name}_interface)
+  set(component_interface_target ${component_name})
   if(NOT TARGET ${component_interface_target})
     # Create the component.
     llvm_component_create(${component_name})
@@ -260,7 +260,7 @@ endfunction()
 
 function(llvm_component_create component_name)
   set(component_props_target ${component_name}_props)
-  set(component_interface_target ${component_name}_interface)
+  set(component_interface_target ${component_name})
 
   # Sanity check.
   if(TARGET ${component_props_target} OR
@@ -359,13 +359,23 @@ function(llvm_component_install component_name)
   set(export_to_llvmexports EXPORT LLVMExports)
   set_property(GLOBAL PROPERTY LLVM_HAS_EXPORTS True)
 
-  # Then generate a component level install-${component_name} and
-  # install-${component_name}-stripped targets.
-  add_custom_target(install-${component_name})
-  add_custom_target(install-${component_name}-stripped)
+  # Create the main install target for the interface library.
+  install(TARGETS ${component_interface_target}
+    ${export_to_llvmexports}
+    LIBRARY DESTINATION lib${LLVM_LIBDIR_SUFFIX} COMPONENT ${component_name}
+    ARCHIVE DESTINATION lib${LLVM_LIBDIR_SUFFIX} COMPONENT ${component_name}
+    RUNTIME DESTINATION bin COMPONENT ${component_name})
+
+  if (NOT LLVM_ENABLE_IDE)
+    add_llvm_install_targets(install-${component_name}
+                              DEPENDS
+                                ${component_interface_target}
+                              COMPONENT ${component_name})
+  endif()
+  set_property(GLOBAL APPEND PROPERTY LLVM_EXPORTS ${component_interface_target})
 
   # Generate install targets for each sub-library.
-  foreach(t ${component_interface_target} ${component_shared_target} ${component_static_target})
+  foreach(t ${component_shared_target} ${component_static_target})
     install(TARGETS ${t}
       ${export_to_llvmexports}
       LIBRARY DESTINATION lib${LLVM_LIBDIR_SUFFIX} COMPONENT ${t}
