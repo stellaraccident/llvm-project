@@ -10,8 +10,8 @@ add_llvm_component_library(LLVMX86AsmParser
   # X86Info
 
   LINK_LIBS PRIVATE
-  LLVMX86Desc
-  LLVMX86Info
+  #LLVMX86Desc
+  #LLVMX86Info
 
   ADD_TO_COMPONENT
   X86

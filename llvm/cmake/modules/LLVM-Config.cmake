@@ -212,6 +212,7 @@ endfunction(llvm_expand_pseudo_components out_components)
 # Map LINK_COMPONENTS to actual libnames.
 function(llvm_map_components_to_libnames out_libs)
   set( link_components ${ARGN} )
+  #message(STATUS "llvm_map_components_to_libnames ${link_components}")
   if(NOT LLVM_AVAILABLE_LIBS)
     # Inside LLVM itself available libs are in a global property.
     get_property(LLVM_AVAILABLE_LIBS GLOBAL PROPERTY LLVM_LIBS)

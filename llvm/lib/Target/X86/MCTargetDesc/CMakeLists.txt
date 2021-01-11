@@ -23,7 +23,7 @@ add_llvm_component_library(LLVMX86Desc
   BinaryFormat
 
   LINK_LIBS PRIVATE
-  LLVMX86Info
+  #LLVMX86Info
 
   ADD_TO_COMPONENT
   X86

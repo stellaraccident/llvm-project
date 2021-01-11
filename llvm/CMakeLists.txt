@@ -1111,7 +1111,9 @@ if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
   if(LLVM_LIBS)
     list(REMOVE_DUPLICATES LLVM_LIBS)
     foreach(lib ${LLVM_LIBS})
-      add_dependencies(llvm-libraries ${lib})
+      # TODO: This should be refactored to be based on component names and
+      # an appropriate dependency.
+      # add_dependencies(llvm-libraries ${lib})
       if (NOT LLVM_ENABLE_IDE)
         add_dependencies(install-llvm-libraries install-${lib})
         add_dependencies(install-llvm-libraries-stripped install-${lib}-stripped)

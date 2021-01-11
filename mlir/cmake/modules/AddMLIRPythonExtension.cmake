@@ -100,7 +100,7 @@ function(add_mlir_python_extension libname extname)
   target_link_libraries(${libname}
     PRIVATE
     MLIRPublicAPI
-    LLVMSupport
+    llvm-component::LLVMSupport
     ${ARG_LINK_LIBS}
     ${PYEXT_LIBADD}
   )

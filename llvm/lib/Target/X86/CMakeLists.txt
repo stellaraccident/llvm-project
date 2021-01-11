@@ -98,10 +98,6 @@ add_llvm_target(X86CodeGen ${sources}
   ProfileData
   CFGuard
 
-  LINK_LIBS PRIVATE
-  LLVMX86Desc
-  LLVMX86Info
-
   ADD_TO_COMPONENT
   X86
 )

@@ -752,12 +752,22 @@ function(add_llvm_component_group name)
 
   set(_component_name ${name})
   llvm_component_create_dummy_source(_dummy_file ${name}_Group)
+
+  # Map legacy component libs.
+  llvm_map_components_to_libnames(_component_libs
+    ${ARG_LINK_COMPONENTS})
+  list(TRANSFORM _component_libs PREPEND "llvm-component::")
+
   llvm_component_add_library(${name}
-    EXCLUDE_FROM_ALL PARTIAL_SOURCES_INTENDED
-    ADD_TO_COMPONENT ${_component_name}
-    ${_dummy_file}
     ${ARG_UNPARSED_ARGUMENTS}
-    LINK_COMPONENTS ${ARG_LINK_COMPONENTS})
+    ${_dummy_file}
+    PARTIAL_SOURCES_INTENDED
+    ADD_TO_COMPONENT ${_component_name}
+    LINK_LIBS ${_component_libs}
+    DEPENDS ${LLVM_COMMON_DEPENDS})
+
+  # TODO: LLVM_LIBS here is actually components.
+  set_property( GLOBAL APPEND PROPERTY LLVM_LIBS ${_component_name} )
 
   # TODO: FIX ME! (or delete - nothing seems to reference?)
   # if(ARG_HAS_JIT)
@@ -778,7 +788,7 @@ function(add_llvm_component_library name)
   cmake_parse_arguments(ARG
     ""
     "COMPONENT_NAME;ADD_TO_COMPONENT"
-    ""
+    "LINK_LIBS;DEPENDS;LINK_COMPONENTS"
     ${ARGN})
 
   set(_component_name)
@@ -794,12 +804,23 @@ function(add_llvm_component_library name)
     set(_component_name ${name})
   endif()
 
-  llvm_component_add_library(${name} ADD_TO_COMPONENT ${_component_name}
-    ${ARG_UNPARSED_ARGUMENTS})
+  # Map legacy component libs.
+  llvm_map_components_to_libnames(_component_libs
+    ${ARG_LINK_COMPONENTS}
+    ${LLVM_LINK_COMPONENTS}
+    )
+  list(TRANSFORM _component_libs PREPEND "llvm-component::")
+
+  llvm_component_add_library(${name}
+    ${ARG_UNPARSED_ARGUMENTS}
+    ADD_TO_COMPONENT ${_component_name}
+    DEPENDS ${ARG_DEPENDS} ${LLVM_COMMON_DEPENDS}
+    LINK_LIBS ${_component_libs} ${ARG_LINK_LIBS})
 
   # Usually done by add_llvm_library but managed separately here.
   # Needed in order to map some component name forms.
-  set_property( GLOBAL APPEND PROPERTY LLVM_LIBS ${name} )
+  # TODO: LLVM_LIBS here is actually components.
+  set_property( GLOBAL APPEND PROPERTY LLVM_LIBS ${_component_name} )
 
   # if(ARG_ADD_TO_COMPONENT)
   #   # Add to an existing LLVM component.

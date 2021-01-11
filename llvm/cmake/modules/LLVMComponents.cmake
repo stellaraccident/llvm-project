@@ -9,7 +9,7 @@
 #
 # Using components:
 # =================
-
+#
 # Linking to components:
 # ----------------------
 # Consumers link to a component in one of two ways:
@@ -93,10 +93,9 @@
 # and component. The namespace is laid out to accomodate this.
 #
 # Adding a library to a component is done by invoking
-# `llvm_component_add_library` (which delegates most of its processing to
-# `llvm_add_library`) and specifying an `ADD_TO_COMPONENT <foo>` parameter.
-# As long as one such library is added to a given component name, then the
-# `llvm_component::<foo>` alias will be available to link against it.
+# `llvm_component_add_library` and specifying an `ADD_TO_COMPONENT <foo>`
+# parameter. As long as one such library is added to a given component name,
+# then the `llvm_component::<foo>` alias will be available to link against it.
 #
 # Internally, a component consists of a number of targets, with a few available
 # for external use:
@@ -109,13 +108,12 @@
 #     related to the component. Get via `llvm_component_get_props_target`.
 #
 # The library name specified in the `llvm_component_add_library` call should
-# be considered an implementation detail and is only useful in the case of
-# assembling multi-library components that have intra-component dependencies.
-# In these cases, libraries within the same component can depend on each other
-# via `target_link_libraries`/`LINK_LIBS` using this library name. Within a
-# component, libraries must not depend on the public `llvm-component::`
-# target for their component (and doing so will be flagged as a dependency
-# cycle).
+# be considered an implementation detail and is generally only useful for
+# setting compiler definitions directly on the objects that comprise this
+# part of the component. Note that it is illegal to depend on one library that
+# makes up a component from another in the same component (and unnecessary,
+# since their objects will participate in the same shared or static library
+# link at the component level).
 #
 # Internal layout:
 # ----------------
@@ -123,15 +121,18 @@
 # to the library `name` passed to `llvm_component_add_library` and
 # `${componentname}` refers to the argument `ADD_TO_COMPONENT`.
 #
-#   * `${libname}` (on disk as `${libname}_static`): The library added to a
-#     component. Always created as a `STATIC OBJECT` library on Unix-like
-#     systems. May have other ancillary libraries created for Windows.
+#   * `${libname}`: An object library containing the objects that should be
+#     contributed to the component.
 #   * `${componentname}_interface`: INTERFACE library that
 #     `llvm-component::${componentname}` aliases to.
 #   * `${componentname}_props` : Custom property target for the component.
 #   * `${componentname}_shared` (on disk as `${componentname}`) :
 #     The shared library for the component (if not redirected to an aggregate
 #     library).
+#   * `${componentname}_static` (on disk as `${componentname}_static`) :
+#     The static library for the component. This library does not participate
+#     in shared library redirection and will be used by executables and
+#     libraries configured for static linking.
 #
 # These should all be considered implementation details and not depended on.
 
@@ -140,45 +141,79 @@ function(llvm_component_add_library name)
   cmake_parse_arguments(ARG
     "EXPORT_EXPLICIT_SYBMOLS"
     "ADD_TO_COMPONENT"
-    ""
+    "ADDITIONAL_HEADERS;DEPENDS;LINK_LIBS"
     ${ARGN})
-
   # Validate arguments.
   if(ARG_ADD_TO_COMPONENT)
-    set(_component_name ${ARG_ADD_TO_COMPONENT})
+    set(component_name ${ARG_ADD_TO_COMPONENT})
   else()
     message(FATAL_ERROR "ADD_TO_COMPONENT is required for ${name}")
   endif()
 
-  # The main component static library and object archive.
-  set(_static_target ${name})
-  llvm_add_library(${_static_target} STATIC OBJECT
-    # Since we want any dynamic library (i.e. libMyComponent.so) to be the
-    # primary name, move the static library to a _static suffixed name.
-    OUTPUT_NAME "${name}_static"
-    #EXPORT_NAME "${name}"
-    ${ARG_UNPARSED_ARGUMENTS})
+  # The main component implementation (object) library.
+  set(_impl_target ${name})
+  llvm_process_sources(_all_src_files
+    ${ARG_UNPARSED_ARGUMENTS} ${ARG_ADDITIONAL_HEADERS})
+  add_library(${_impl_target} OBJECT EXCLUDE_FROM_ALL
+    ${_all_src_files}
+  )
+  llvm_update_compile_flags(${_impl_target})
+  set_target_properties(${_impl_target} PROPERTIES FOLDER "Object Libraries")
   # Set a marker to indicate that the library is a component. This is used
   # by some validity checks to enforce depending on it in the right way.
-  set_target_properties(${_static_library} PROPERTIES
-    LLVM_LIBRARY_IS_NEWCOMPONENT TRUE)
+  set_target_properties(${_impl_target} PROPERTIES
+    LLVM_LIBRARY_IS_NEWCOMPONENT_LIB TRUE)
 
-  # Create the interface library for the component, if it has not already
-  # been created.
-  set(_interface_target ${_component_name}_interface)
-  if(NOT TARGET ${_interface_target})
-    add_library(${_interface_target} INTERFACE)
-    llvm_component_export_target(${_interface_target})
-    # And alias it for easy use.
-    add_library(llvm-component::${_component_name} ALIAS ${_interface_target})
+  # Explicit depends.
+  if(ARG_DEPENDS)
+    # TODO: Object library deps are non transitive.
+    add_dependencies(${_impl_target} ${ARG_DEPENDS})
+  endif()
+  if(ARG_LINK_LIBS)
+    # TODO: Object library deps are non transitive.
+    target_link_libraries(${_impl_target} PRIVATE ${ARG_LINK_LIBS})
   endif()
 
-  # Add a dummy target that is just for holding component properties.
-  # This is because INTERFACE libraries cannot have custom properties, and
-  # we prefer to not randomly pollute the global namespace.
-  llvm_component_get_props_target(_props_target ${_component_name})
-  if(NOT TARGET ${_props_target})
-    add_custom_target(${_props_target})
+  # Set export visibility at the library level.
+  if(ARG_EXPORT_EXPLICIT_SYBMOLS)
+    set_property(TARGET ${_impl_target} CXX_VISIBILITY_PRESET "hidden")
+    set_property(TARGET ${_impl_target} C_VISIBILITY_PRESET "hidden")
+  endif()
+
+  # Get or create the component.
+  set(component_props_target ${component_name}_props)
+  set(component_interface_target ${component_name}_interface)
+  if(NOT TARGET ${component_interface_target})
+    # Create the component.
+    llvm_component_create(${component_name})
+  endif()
+
+  # Resolve the static and shared library sub-targets from the component.
+  get_target_property(component_shared_target
+    ${component_props_target} LLVM_NEWCOMPONENT_SHARED_TARGET)
+  get_target_property(component_static_target
+    ${component_props_target} LLVM_NEWCOMPONENT_STATIC_TARGET)
+
+  # Add the impl library to component static and link libraries as needed.
+  if(component_shared_target)
+    if(ARG_DEPENDS)
+      add_dependencies(${component_shared_target} ${ARG_DEPENDS})
+    endif()
+    target_sources(${component_shared_target} PRIVATE $<TARGET_OBJECTS:${_impl_target}>)
+    # NOTE: A generator such as $<TARGET_PROPERTY:${_impl_target},LINK_LIBRARIES>
+    # can make this property "live" based on the object library, but formulating
+    # it properly requires more features than old versions of cmake have (and
+    # is tricky).
+    target_link_libraries(${component_shared_target}
+      PRIVATE ${ARG_LINK_LIBS})
+  endif()
+  if(component_static_target)
+    if(ARG_DEPENDS)
+      add_dependencies(${component_static_target} ${ARG_DEPENDS})
+    endif()
+    target_sources(${component_static_target} PRIVATE $<TARGET_OBJECTS:${_impl_target}>)
+    target_link_libraries(${component_static_target}
+      PRIVATE ${ARG_LINK_LIBS})
   endif()
 
   # When building a multi-library component, we will end up with cases where
@@ -192,111 +227,80 @@ function(llvm_component_add_library name)
   # the dependency graph and tell you explicitly what is wrong (an this only
   # affects *implementations* of a component, which are fine to hold to a
   # higher bar than consumers).
-  if(NOT ${name} STREQUAL ${_component_name})
-    add_library(llvm-component::${name} ALIAS ${_interface_target})
+  # TODO: Revisit this once the migration is complete and see if we can
+  # eliminate this case.
+  if(NOT ${name} STREQUAL ${component_name})
+    add_library(llvm-component::${name} ALIAS ${component_interface_target})
   endif()
 
   # The compile targets are responsible for compiling the sources, and the
   # link targets are what is ultimately performing the link. In degenerate
   # cases, there can be multiples of each (i.e. on windows where libraries
   # destined for a DLL are compiled differently from those that are not).
-  set_target_properties(${_props_target} PROPERTIES
-    LLVM_NEWCOMPONENT_INTERFACE_TARGET ${_interface_target}
-    LLVM_NEWCOMPONENT_COMPILE_TARGETS obj.${name}
-    LLVM_NEWCOMPONENT_LINK_TARGETS ${name}
+  set_property(TARGET ${component_props_target}
+    APPEND PROPERTY LLVM_NEWCOMPONENT_COMPILE_TARGETS ${_impl_target}
+  )
+
+  # Extend the interface link libraries appropriately.
+  # Static linking just links directly against the static library.
+  target_link_libraries(${component_interface_target} INTERFACE
+    $<$<BOOL:$<TARGET_PROPERTY:LLVM_LINK_STATIC>>:${component_static_target}>
+  )
+
+  # Shared linking will either link against component shared library, if
+  # it exists, or the TODO
+  set(actual_shared_target ${component_shared_target})
+  if(NOT component_shared_target)
+    set(actual_shared_target ${component_static_target})
+  endif()
+  target_link_libraries(${component_interface_target} INTERFACE
+    $<$<NOT:$<BOOL:$<TARGET_PROPERTY:LLVM_LINK_STATIC>>>:${actual_shared_target}>
+  )
+endfunction()
+
+function(llvm_component_create component_name)
+  set(component_props_target ${component_name}_props)
+  set(component_interface_target ${component_name}_interface)
+
+  # Sanity check.
+  if(TARGET ${component_props_target} OR
+     TARGET ${component_interface_target})
+    message(FATAL_ERROR "Attempted to create component ${component_name} multiple times")
+  endif()
+
+  # Create the interface library for the component.
+  add_library(${component_interface_target} INTERFACE)
+
+  # And alias it for easy use.
+  add_library(llvm-component::${component_name} ALIAS ${component_interface_target})
+
+  # Add a dummy target that is just for holding component properties.
+  # This is because INTERFACE libraries cannot have custom properties, and
+  # we prefer to not randomly pollute the global namespace.
+  add_custom_target(${component_props_target})
+
+  # Set the interface target on the property target.
+  set_target_properties(${component_props_target} PROPERTIES
+    LLVM_NEWCOMPONENT_INTERFACE_TARGET ${component_interface_target}
   )
 
   # Locate the component shared library target that corresponds to this
   # component name.
-  llvm_component_get_shared_target(_shared_target ${_component_name})
-  if(_shared_target)
-    set_property(TARGET ${_props_target} APPEND PROPERTY
-      LLVM_NEWCOMPONENT_LINK_TARGETS ${_shared_target}
-    )
+  llvm_component_ensure_libraries(${_component_name})
 
-    # Add objects to the shared library target sources.
-    target_sources(${_shared_target}
-      PRIVATE $<TARGET_OBJECTS:obj.${_static_target}>)
-
-    # TODO: Propagate link libraries and link components from the library.
-    get_target_property(_link_libraries ${_static_target} LINK_LIBRARIES)
-    if(_link_libraries)
-      target_link_libraries(${_shared_target} PRIVATE ${_link_libraries})
-    endif()
-  endif()
-
-  # Set compile/link settings (uses utility functions as callers will to
-  # verify).
-  llvm_component_get_compile_targets(_compile_targets ${_component_name})
-  llvm_component_get_link_targets(_link_targets ${_component_name})
-  if(ARG_EXPORT_EXPLICIT_SYBMOLS)
-    set_property(TARGET ${_compile_targets} CXX_VISIBILITY_PRESET "hidden")
-    set_property(TARGET ${_compile_targets} C_VISIBILITY_PRESET "hidden")
-  endif()
-
-  # Export the static library.
-  llvm_component_export_target(${_static_target} STATIC)
-
-  # Extend the link libraries of the interface library appropriately.
-  target_link_libraries(${_interface_target} INTERFACE
-    $<$<BOOL:$<TARGET_PROPERTY:LLVM_LINK_STATIC>>:${_static_target}>
-  )
-  if(_shared_target)
-    # Shared libraries enabled, non-static uses shared.
-    target_link_libraries(${_interface_target} INTERFACE
-      $<$<NOT:$<BOOL:$<TARGET_PROPERTY:LLVM_LINK_STATIC>>>:${_shared_target}>
-    )
-  else()
-    # Shared libraries disabled, non-static is still static.
-    target_link_libraries(${_interface_target} INTERFACE
-      $<$<NOT:$<BOOL:$<TARGET_PROPERTY:LLVM_LINK_STATIC>>>:${_static_target}>
-    )
-  endif()
-endfunction()
-
-function(llvm_component_export_target name)
-  cmake_parse_arguments(ARG
-    "STATIC"
-    ""
-    ""
-    ${ARGN})
-
-  set(export_to_llvmexports)
-
-  # Note: Shared library components are always exported. Static components
-  # are exported conditionally.
-  if(NOT ARG_STATIC OR ${name} IN_LIST LLVM_DISTRIBUTION_COMPONENTS OR
-      NOT LLVM_DISTRIBUTION_COMPONENTS)
-    set(export_to_llvmexports EXPORT LLVMExports)
-    set_property(GLOBAL PROPERTY LLVM_HAS_EXPORTS True)
-  endif()
-
-  install(TARGETS ${name}
-    ${export_to_llvmexports}
-    LIBRARY DESTINATION lib${LLVM_LIBDIR_SUFFIX} COMPONENT ${name}
-    ARCHIVE DESTINATION lib${LLVM_LIBDIR_SUFFIX} COMPONENT ${name}
-    RUNTIME DESTINATION bin COMPONENT ${name})
-
-    if (NOT LLVM_ENABLE_IDE)
-      add_llvm_install_targets(install-${name}
-                               DEPENDS ${name}
-                               COMPONENT ${name})
-    endif()
-
-  set_property(GLOBAL APPEND PROPERTY LLVM_EXPORTS ${name})
+  # Exports and creates install targets for the component.
+  llvm_component_install(${_component_name})
 endfunction()
 
 # Finds the shared library target that corresponds to the requested
-# `component_name`, setting it in `out_target_name`. Resolves to
-# ${component_name}-NOTFOUND if shared library building is disabled.
-function(llvm_component_get_shared_target out_target_name component_name)
-  if(NOT LLVM_BUILD_SHARED_COMPONENTS)
-    set(${_out_target_name} ${component_name}-NOTFOUND PARENT_SCOPE)
-    return()
-  endif()
+# `component_name`.
+function(llvm_component_ensure_libraries component_name)
+  set(component_props_target ${component_name}_props)
+  llvm_component_create_dummy_source(_dummy_file ${component_name})
 
-  get_property(_shared_target GLOBAL
-    PROPERTY LLVM_NEWCOMPONENT_${component_name}_SHARED_TARGET)
+  # Ensure the shared target.
+  get_target_property(_shared_taget
+    ${component_props_target} LLVM_NEWCOMPONENT_SHARED_TARGET)
   if(NOT _shared_target)
     # See if there is a redirection entry for the component (i.e. specifying
     # that the component goes into a dedicated shared library).
@@ -309,22 +313,75 @@ function(llvm_component_get_shared_target out_target_name component_name)
     endif()
 
     # Memorialize the decision.
-    set_property(GLOBAL PROPERTY
-      LLVM_NEWCOMPONENT_${component_name}_SHARED_TARGET ${_shared_target})
+    set_property(TARGET ${component_props_target} PROPERTY
+      LLVM_NEWCOMPONENT_SHARED_TARGET ${_shared_target})
+    set_property(TARGET ${component_props_target} APPEND PROPERTY
+      LLVM_NEWCOMPONENT_LINK_TARGETS ${_shared_target})
   endif()
 
-  if (NOT TARGET ${_shared_target})
+  if(NOT TARGET ${_shared_target})
     # Not yet created. Do so now.
     # TODO: This doesn't quite work yet for redirection. Need to not set the
     # OUTPUT_NAME in that case.
-    llvm_component_create_dummy_source(_dummy_file ${component_name})
-    llvm_add_library(${_shared_target}
-      OUTPUT_NAME ${component_name}
-      SHARED PARTIAL_SOURCES_INTENDED
+    add_library(${_shared_target} SHARED
       ${_dummy_file})
+    set_property(TARGET ${_shared_target} PROPERTY OUTPUT_NAME ${component_name})
   endif()
 
-  set(${out_target_name} ${_shared_target} PARENT_SCOPE)
+  # Ensure the static target. Static targets are always per-component and do
+  # not participate in redirection.
+  get_target_property(_static_taget
+    ${component_props_target} LLVM_NEWCOMPONENT_STATIC_TARGET)
+  if(NOT _static_target)
+    # Latch it.
+    set(_static_target "${component_name}_static")
+    set_property(TARGET ${component_props_target} PROPERTY
+      LLVM_NEWCOMPONENT_STATIC_TARGET ${_static_target})
+    set_property(TARGET ${component_props_target} APPEND PROPERTY
+      LLVM_NEWCOMPONENT_LINK_TARGETS ${_shared_target})
+  endif()
+
+  if(NOT TARGET ${_static_target})
+    add_library(${_static_target} STATIC
+      ${_dummy_file})
+  endif()
+endfunction()
+
+function(llvm_component_install component_name)
+  set(component_props_target ${component_name}_props)
+  get_target_property(component_interface_target ${component_props_target}
+    LLVM_NEWCOMPONENT_INTERFACE_TARGET)
+  get_target_property(component_static_target ${component_props_target}
+    LLVM_NEWCOMPONENT_STATIC_TARGET)
+  get_target_property(component_shared_target ${component_props_target}
+    LLVM_NEWCOMPONENT_SHARED_TARGET)
+
+  set(export_to_llvmexports EXPORT LLVMExports)
+  set_property(GLOBAL PROPERTY LLVM_HAS_EXPORTS True)
+
+  # Then generate a component level install-${component_name} and
+  # install-${component_name}-stripped targets.
+  add_custom_target(install-${component_name})
+  add_custom_target(install-${component_name}-stripped)
+
+  # Generate install targets for each sub-library.
+  foreach(t ${component_interface_target} ${component_shared_target} ${component_static_target})
+    install(TARGETS ${t}
+      ${export_to_llvmexports}
+      LIBRARY DESTINATION lib${LLVM_LIBDIR_SUFFIX} COMPONENT ${t}
+      ARCHIVE DESTINATION lib${LLVM_LIBDIR_SUFFIX} COMPONENT ${t}
+      RUNTIME DESTINATION bin COMPONENT ${t})
+
+    if (NOT LLVM_ENABLE_IDE)
+      add_llvm_install_targets(install-${t}
+                                DEPENDS
+                                  ${t}
+                                COMPONENT ${t})
+      add_dependencies(install-${component_name} install-${t})
+      add_dependencies(install-${component_name}-stripped install-${t}-stripped)
+    endif()
+    set_property(GLOBAL APPEND PROPERTY LLVM_EXPORTS ${t})
+  endforeach()
 endfunction()
 
 # Gets a target in a component responsible for holding generic properites about
