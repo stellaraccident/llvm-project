@@ -724,13 +724,34 @@ endfunction()
 # to link extra component into an existing group.
 function(add_llvm_component_group name)
   cmake_parse_arguments(ARG "HAS_JIT" "" "LINK_COMPONENTS" ${ARGN})
-  add_custom_target(${name})
-  if(ARG_HAS_JIT)
-    set_property(TARGET ${name} PROPERTY COMPONENT_HAS_JIT ON)
-  endif()
-  if(ARG_LINK_COMPONENTS)
-    set_property(TARGET ${name} PROPERTY LLVM_LINK_COMPONENTS ${ARG_LINK_COMPONENTS})
-  endif()
+
+  set(_component_name ${name})
+  llvm_component_create_dummy_source(_dummy_file ${name}_Group)
+
+  # Map legacy component libs.
+  llvm_map_components_to_libnames(_component_libs
+    ${ARG_LINK_COMPONENTS})
+  # TODO: Remove prefix.
+  list(TRANSFORM _component_libs PREPEND "llvm-component::")
+
+  llvm_component_add_library(${name}
+    ${ARG_UNPARSED_ARGUMENTS}
+    ${_dummy_file}
+    PARTIAL_SOURCES_INTENDED
+    ADD_TO_COMPONENT ${_component_name}
+    LINK_LIBS ${_component_libs}
+    DEPENDS ${LLVM_COMMON_DEPENDS})
+
+  # TODO: LLVM_LIBS here is actually components.
+  set_property( GLOBAL APPEND PROPERTY LLVM_LIBS ${_component_name} )
+
+  # add_custom_target(${name})
+  # if(ARG_HAS_JIT)
+  #   set_property(TARGET ${name} PROPERTY COMPONENT_HAS_JIT ON)
+  # endif()
+  # if(ARG_LINK_COMPONENTS)
+  #   set_property(TARGET ${name} PROPERTY LLVM_LINK_COMPONENTS ${ARG_LINK_COMPONENTS})
+  # endif()
 endfunction()
 
 # An LLVM component is a cmake target with the following cmake properties
@@ -746,20 +767,51 @@ function(add_llvm_component_library name)
   cmake_parse_arguments(ARG
     ""
     "COMPONENT_NAME;ADD_TO_COMPONENT"
-    ""
+    "LINK_LIBS;DEPENDS;LINK_COMPONENTS"
     ${ARGN})
-  add_llvm_library(${name} COMPONENT_LIB ${ARG_UNPARSED_ARGUMENTS})
-  string(REGEX REPLACE "^LLVM" "" component_name ${name})
-  set_property(TARGET ${name} PROPERTY LLVM_COMPONENT_NAME ${component_name})
-
+  set(_component_name)
   if(ARG_COMPONENT_NAME)
-    set_property(GLOBAL PROPERTY LLVM_COMPONENT_NAME_${ARG_COMPONENT_NAME} ${component_name})
+    # TODO: Why does it need the prefix?
+    set(_component_name LLVM${ARG_COMPONENT_NAME})
+  endif()
+  if(NOT _component_name)
+    set(_component_name ${ARG_ADD_TO_COMPONENT})
+  endif()
+  if(NOT _component_name)
+    # Default to the library name for the component name (i.e LLVMDemangle).
+    set(_component_name ${name})
   endif()
 
-  if(ARG_ADD_TO_COMPONENT)
-    set_property(TARGET ${ARG_ADD_TO_COMPONENT} APPEND PROPERTY LLVM_LINK_COMPONENTS ${component_name})
-  endif()
+  # Map legacy component libs.
+  llvm_map_components_to_libnames(_component_libs
+    ${ARG_LINK_COMPONENTS}
+    ${LLVM_LINK_COMPONENTS}
+    )
+  # TODO: Don't need the prefix.
+  list(TRANSFORM _component_libs PREPEND "llvm-component::")
 
+  llvm_component_add_library(${name}
+    ${ARG_UNPARSED_ARGUMENTS}
+    ADD_TO_COMPONENT ${_component_name}
+    DEPENDS ${ARG_DEPENDS} ${LLVM_COMMON_DEPENDS}
+    LINK_LIBS ${_component_libs} ${ARG_LINK_LIBS})
+
+  # Usually done by add_llvm_library but managed separately here.
+  # Needed in order to map some component name forms.
+  # TODO: LLVM_LIBS here is actually components.
+  set_property(GLOBAL APPEND PROPERTY LLVM_LIBS ${_component_name})
+
+  # add_llvm_library(${name} COMPONENT_LIB ${ARG_UNPARSED_ARGUMENTS})
+  # string(REGEX REPLACE "^LLVM" "" component_name ${name})
+  # set_property(TARGET ${name} PROPERTY LLVM_COMPONENT_NAME ${component_name})
+
+  # if(ARG_COMPONENT_NAME)
+  #   set_property(GLOBAL PROPERTY LLVM_COMPONENT_NAME_${ARG_COMPONENT_NAME} ${component_name})
+  # endif()
+
+  # if(ARG_ADD_TO_COMPONENT)
+  #   set_property(TARGET ${ARG_ADD_TO_COMPONENT} APPEND PROPERTY LLVM_LINK_COMPONENTS ${component_name})
+  # endif()
 endfunction()
 
 macro(add_llvm_library name)

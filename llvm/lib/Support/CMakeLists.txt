@@ -231,6 +231,10 @@ add_llvm_component_library(LLVMSupport
   Demangle
   )
 
+llvm_component_get_props_target(_props_target LLVMSupport)
+llvm_component_get_compile_targets(_compile_targets LLVMSupport)
+llvm_component_get_link_targets(_link_targets LLVMSupport)
+
 set(llvm_system_libs ${system_libs})
 
 # This block is only needed for llvm-config. When we deprecate llvm-config and
@@ -253,22 +257,22 @@ if(LLVM_ENABLE_TERMINFO)
   set(llvm_system_libs ${llvm_system_libs} "${terminfo_library}")
 endif()
 
-set_property(TARGET LLVMSupport PROPERTY LLVM_SYSTEM_LIBS "${llvm_system_libs}")
+set_property(TARGET ${_prop_target} PROPERTY LLVM_SYSTEM_LIBS "${llvm_system_libs}")
 
 
 if(LLVM_INTEGRATED_CRT_ALLOC)
   if(LLVM_INTEGRATED_CRT_ALLOC MATCHES "snmalloc$")
-    set_property(TARGET LLVMSupport PROPERTY CXX_STANDARD 17)
+    set_property(TARGET ${_compile_targets} PROPERTY CXX_STANDARD 17)
     add_definitions(-D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING)
     if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" AND
         "${CMAKE_SYSTEM_PROCESSOR}" MATCHES "x86_64")
-      set_property(TARGET LLVMSupport PROPERTY COMPILE_FLAGS "-mcx16")
+      set_property(TARGET ${_compile_targets} PROPERTY COMPILE_FLAGS "-mcx16")
     endif()
   endif()
 endif()
 
 if(LLVM_WITH_Z3)
-  target_include_directories(LLVMSupport SYSTEM
+  llvm_component_include_dirs(LLVMSupport SYSTEM
     PRIVATE
     ${Z3_INCLUDE_DIR}
     )
