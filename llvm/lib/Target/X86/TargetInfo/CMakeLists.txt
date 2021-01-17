@@ -5,5 +5,5 @@ add_llvm_component_library(LLVMX86Info
   Support
 
   ADD_TO_COMPONENT
-  X86
+  LLVMTargetX86
   )

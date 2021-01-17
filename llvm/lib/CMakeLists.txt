@@ -57,5 +57,4 @@ else()
 endif()
 
 # Component post-processing
-LLVMBuildResolveComponentsLink()
-LLVMBuildGenerateCFragment(OUTPUT ${LLVMCONFIGLIBRARYDEPENDENCIESINC})
+#LLVMBuildGenerateCFragment(OUTPUT ${LLVMCONFIGLIBRARYDEPENDENCIESINC})

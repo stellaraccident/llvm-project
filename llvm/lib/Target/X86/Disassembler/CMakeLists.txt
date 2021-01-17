@@ -4,8 +4,7 @@ add_llvm_component_library(LLVMX86Disassembler
   LINK_COMPONENTS
   MCDisassembler
   Support
-  X86Info
 
   ADD_TO_COMPONENT
-  X86
+  LLVMTargetX86
   )

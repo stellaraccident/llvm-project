@@ -9,8 +9,12 @@ add_llvm_tool(llvm-config
   )
 
 # Compute the substitution values for various items.
-get_property(SUPPORT_SYSTEM_LIBS TARGET LLVMSupport PROPERTY LLVM_SYSTEM_LIBS)
-get_property(WINDOWSMANIFEST_SYSTEM_LIBS TARGET LLVMWindowsManifest PROPERTY LLVM_SYSTEM_LIBS)
+llvm_component_get_props_target(_llvm_support_props_target LLVMSupport)
+llvm_component_get_props_target(_llvm_windows_manifest_props_target LLVMWindowsManifest)
+
+get_property(SUPPORT_SYSTEM_LIBS TARGET ${_llvm_support_props_target} PROPERTY LLVM_SYSTEM_LIBS)
+get_property(WINDOWSMANIFEST_SYSTEM_LIBS TARGET ${_llvm_windows_manifest_props_target} PROPERTY LLVM_SYSTEM_LIBS)
+
 foreach(l ${SUPPORT_SYSTEM_LIBS} ${WINDOWSMANIFEST_SYSTEM_LIBS})
   if(MSVC)
     set(SYSTEM_LIBS ${SYSTEM_LIBS} "${l}.lib")

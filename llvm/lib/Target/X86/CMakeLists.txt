@@ -1,4 +1,4 @@
-add_llvm_component_group(X86 HAS_JIT)
+add_llvm_component_group(LLVMTargetX86 HAS_JIT)
 
 set(LLVM_TARGET_DEFINITIONS X86.td)
 
@@ -91,14 +91,12 @@ add_llvm_target(X86CodeGen ${sources}
   SelectionDAG
   Support
   Target
-  X86Desc
-  X86Info
   GlobalISel
   ProfileData
   CFGuard
 
   ADD_TO_COMPONENT
-  X86
+  LLVMTargetX86
 )
 
 add_subdirectory(AsmParser)
