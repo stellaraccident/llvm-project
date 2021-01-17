@@ -13,9 +13,10 @@
 # Linking to components:
 # ----------------------
 # Consumers link to a component in one of two ways:
-#   a) With a special `llvm-component::` namespace prefixed to the component
-#      name in target_link_libraries (or LINK_LIBS if using an llvm_add_library
-#      derived macro). Example: `llvm-component::LLVMSupport`.
+#   a) By linking to the interface library named the same as the component
+#      name. This will automatically link in the correct static or dynamic
+#      way, depending on the build configuration and settings of the final
+#      executable or shared library.
 #   b) For "classic" LLVM component aliases (such as "Support", "Core", etc),
 #      the following mechanisms will expand component aliases and add them to
 #      the target_link_libraries as above:
@@ -48,8 +49,7 @@
 # The wrappers `add_llvm_component_group` and `add_llvm_component_library`
 # exist for components under `llvm/lib` defined with classic naming (i.e.
 # "Core", "Support", etc). The naming is transparently mapped to underlying
-# calls to `llvm_component_add_library` and dependencies on `llvm-component::`
-# namespaces.
+# calls to `llvm_component_add_library`.
 #
 # Visibility:
 # -----------
@@ -123,8 +123,7 @@
 #
 #   * `${libname}_impl`: An object library containing the objects that should be
 #     contributed to the component.
-#   * `${componentname}`: INTERFACE library that
-#     `llvm-component::${componentname}` aliases to.
+#   * `${componentname}`: INTERFACE library that represents the component.
 #   * `${componentname}_props` : Custom property target for the component.
 #   * `${componentname}_shared` (on disk as `${componentname}`) :
 #     The shared library for the component (if not redirected to an aggregate
@@ -216,23 +215,6 @@ function(llvm_component_add_library name)
       PRIVATE ${ARG_LINK_LIBS})
   endif()
 
-  # When building a multi-library component, we will end up with cases where
-  # the library name (i.e. LLVMX86Desc) differs from the component name
-  # (i.e. X86). However, it is quite wide-spread for consumers to still want
-  # to link to these sub-component libraries as if they were components in
-  # their own right. In order to support this, we simply alias the sub-component
-  # library name into the llvm-component:: namespace, pointing back to the
-  # main component. This has the nice side-effect that if *within* a component,
-  # you depend on a sub-component in such a way, CMake will detect a cycle in
-  # the dependency graph and tell you explicitly what is wrong (an this only
-  # affects *implementations* of a component, which are fine to hold to a
-  # higher bar than consumers).
-  # TODO: Revisit this once the migration is complete and see if we can
-  # eliminate this case.
-  if(NOT ${name} STREQUAL ${component_name})
-    add_library(llvm-component::${name} ALIAS ${component_interface_target})
-  endif()
-
   # The compile targets are responsible for compiling the sources, and the
   # link targets are what is ultimately performing the link. In degenerate
   # cases, there can be multiples of each (i.e. on windows where libraries
@@ -270,9 +252,6 @@ function(llvm_component_create component_name)
 
   # Create the interface library for the component.
   add_library(${component_interface_target} INTERFACE)
-
-  # And alias it for easy use.
-  add_library(llvm-component::${component_name} ALIAS ${component_interface_target})
 
   # Add a dummy target that is just for holding component properties.
   # This is because INTERFACE libraries cannot have custom properties, and

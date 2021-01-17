@@ -731,8 +731,6 @@ function(add_llvm_component_group name)
   # Map legacy component libs.
   llvm_map_components_to_libnames(_component_libs
     ${ARG_LINK_COMPONENTS})
-  # TODO: Remove prefix.
-  list(TRANSFORM _component_libs PREPEND "llvm-component::")
 
   llvm_component_add_library(${name}
     ${ARG_UNPARSED_ARGUMENTS}
@@ -787,8 +785,6 @@ function(add_llvm_component_library name)
     ${ARG_LINK_COMPONENTS}
     ${LLVM_LINK_COMPONENTS}
     )
-  # TODO: Don't need the prefix.
-  list(TRANSFORM _component_libs PREPEND "llvm-component::")
 
   llvm_component_add_library(${name}
     ${ARG_UNPARSED_ARGUMENTS}
