@@ -950,6 +950,11 @@ macro(add_llvm_executable name)
   set(EXCLUDE_FROM_ALL OFF)
   set_output_directory(${name} BINARY_DIR ${LLVM_RUNTIME_OUTPUT_INTDIR} LIBRARY_DIR ${LLVM_LIBRARY_OUTPUT_INTDIR})
 
+  # Force static linkage.
+  if (ARG_DISABLE_LLVM_LINK_LLVM_DYLIB)
+    set_property(TARGET ${name} PROPERTY LLVM_LINK_STATIC ON)
+  endif()
+
   # Link components.
   llvm_map_components_to_libnames(_llvm_component_libs
     ${LLVM_LINK_COMPONENTS}
@@ -1502,7 +1507,9 @@ function(add_unittest test_suite test_name)
   set(LLVM_REQUIRES_RTTI OFF)
 
   list(APPEND LLVM_LINK_COMPONENTS Support) # gtest needs it for raw_ostream
-  add_llvm_executable(${test_name} IGNORE_EXTERNALIZE_DEBUGINFO NO_INSTALL_RPATH ${ARGN})
+  add_llvm_executable(${test_name}
+    IGNORE_EXTERNALIZE_DEBUGINFO
+    NO_INSTALL_RPATH ${ARGN})
   set(outdir ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR})
   set_output_directory(${test_name} BINARY_DIR ${outdir} LIBRARY_DIR ${outdir})
   # libpthreads overrides some standard library symbols, so main
