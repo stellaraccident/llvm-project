@@ -128,6 +128,16 @@ function(llvm_expand_pseudo_components out_components)
           message(WARNING "Target library LLVMTarget${t} not found. Skipping.")
         endif()
       endforeach()
+    elseif("${c}" STREQUAL "ScalarOpts")
+      # TODO: Many things refer to a component named "ScalarOpts", but that
+      # is a library of the component. Replace these occurences and remove this
+      # exception.
+      list(APPEND expanded_components "Scalar")
+    elseif("${c}" STREQUAL "ObjCARCOpts")
+      # TODO: Many things refer to a component named "ObjCARCOpts", but that
+      # is a library of the component. Replace these occurences and remove this
+      # exception.
+      list(APPEND expanded_components "ObjCARC")
     else()
       list(APPEND expanded_components "${c}")
     endif()
