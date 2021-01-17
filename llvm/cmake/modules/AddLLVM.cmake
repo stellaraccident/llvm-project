@@ -951,13 +951,15 @@ macro(add_llvm_executable name)
     add_llvm_symbol_exports( ${name} ${LLVM_EXPORTED_SYMBOL_FILE} )
   endif(LLVM_EXPORTED_SYMBOL_FILE)
 
-  if (LLVM_LINK_LLVM_DYLIB AND NOT ARG_DISABLE_LLVM_LINK_LLVM_DYLIB)
-    set(USE_SHARED USE_SHARED)
-  endif()
-
   set(EXCLUDE_FROM_ALL OFF)
   set_output_directory(${name} BINARY_DIR ${LLVM_RUNTIME_OUTPUT_INTDIR} LIBRARY_DIR ${LLVM_LIBRARY_OUTPUT_INTDIR})
-  llvm_config( ${name} ${USE_SHARED} ${LLVM_LINK_COMPONENTS} )
+
+  # Link components.
+  llvm_map_components_to_libnames(_llvm_component_libs
+    ${LLVM_LINK_COMPONENTS}
+  )
+  target_link_libraries(${name} PRIVATE ${_llvm_component_libs})
+
   if( LLVM_COMMON_DEPENDS )
     add_dependencies( ${name} ${LLVM_COMMON_DEPENDS} )
   endif( LLVM_COMMON_DEPENDS )
