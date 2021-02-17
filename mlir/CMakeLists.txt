@@ -121,9 +121,9 @@ endif()
 include_directories( "include")
 include_directories( ${MLIR_INCLUDE_DIR})
 
-# Adding tools/mlir-tblgen here as calling add_tablegen sets some variables like
-# MLIR_TABLEGEN_EXE in PARENT_SCOPE which gets lost if that folder is included
-# from another directory like tools
+# Adding host codegen (like tools/mlir-tblgen here as they need to inject
+# some variables into the parent scope for cross compilation and this gets lost
+# if that folder is included from another directory like tools.
 add_subdirectory(tools/mlir-tblgen)
 add_subdirectory(tools/mlir-linalg-ods-gen)
 
