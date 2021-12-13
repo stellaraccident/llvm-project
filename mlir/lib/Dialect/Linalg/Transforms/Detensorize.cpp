@@ -235,7 +235,8 @@ struct LinalgDetensorize : public LinalgDetensorizeBase<LinalgDetensorize> {
     /// detensored, then:
     /// - opsToDetensor should be = {linalg.generic{add}}.
     /// - blockArgsToDetensor should be = {bb1 -> {0}, bb2 -> {0}}.
-    virtual void compute(FuncOp func, DetensorizeTypeConverter typeConverter,
+    virtual void compute(Operation *func,
+                         DetensorizeTypeConverter typeConverter,
                          DenseSet<Operation *> &opsToDetensor,
                          DenseSet<BlockArgument> &blockArgsToDetensor) = 0;
 
@@ -286,18 +287,18 @@ struct LinalgDetensorize : public LinalgDetensorizeBase<LinalgDetensorize> {
   /// AND can be detensored.
   class ControlFlowDetectionModel : public CostModel {
   public:
-    void compute(FuncOp func, DetensorizeTypeConverter typeConverter,
+    void compute(Operation *func, DetensorizeTypeConverter typeConverter,
                  DenseSet<Operation *> &opsToDetensor,
                  DenseSet<BlockArgument> &blockArgsToDetensor) override {
       SmallVector<Value> workList;
 
-      func.walk([&](CondBranchOp condBr) {
+      func->walk([&](CondBranchOp condBr) {
         for (auto operand : condBr.getOperands()) {
           workList.push_back(operand);
         }
       });
 
-      func.walk([&](BranchOp br) {
+      func->walk([&](BranchOp br) {
         for (auto operand : br.getOperands()) {
           workList.push_back(operand);
         }
@@ -491,21 +492,22 @@ struct LinalgDetensorize : public LinalgDetensorizeBase<LinalgDetensorize> {
   /// Detensorize everything that can detensored.
   class AggressiveDetensoringModel : public CostModel {
   public:
-    void compute(FuncOp func, DetensorizeTypeConverter typeConverter,
+    void compute(Operation *func, DetensorizeTypeConverter typeConverter,
                  DenseSet<Operation *> &opsToDetensor,
                  DenseSet<BlockArgument> &blockArgsToDetensor) override {
-      func.walk([&](GenericOp genericOp) {
+      func->walk([&](GenericOp genericOp) {
         if (shouldBeDetensored(genericOp, typeConverter))
           opsToDetensor.insert(genericOp);
       });
 
-      for (Block &block : llvm::drop_begin(func.getBody(), 1))
+      for (Block &block :
+           llvm::drop_begin(function_like_impl::getFunctionBody(func), 1))
         for (BlockArgument blockArgument : block.getArguments())
           blockArgsToDetensor.insert(blockArgument);
     }
   };
 
-  void runOnFunction() override {
+  void runOnOperation() override {
     MLIRContext *context = &getContext();
     DetensorizeTypeConverter typeConverter;
     RewritePatternSet patterns(context);
@@ -516,12 +518,12 @@ struct LinalgDetensorize : public LinalgDetensorizeBase<LinalgDetensorize> {
 
     if (aggressiveMode.getValue()) {
       AggressiveDetensoringModel costModel;
-      costModel.compute(getFunction(), typeConverter, opsToDetensor,
+      costModel.compute(getOperation(), typeConverter, opsToDetensor,
                         blockArgsToDetensor);
 
     } else {
       ControlFlowDetectionModel costModel;
-      costModel.compute(getFunction(), typeConverter, opsToDetensor,
+      costModel.compute(getOperation(), typeConverter, opsToDetensor,
                         blockArgsToDetensor);
     }
 
@@ -531,6 +533,7 @@ struct LinalgDetensorize : public LinalgDetensorizeBase<LinalgDetensorize> {
     target.addDynamicallyLegalOp<GenericOp>(
         [&](GenericOp op) { return !opsToDetensor.count(op); });
 
+    // TODO: Make dynamic.
     target.addDynamicallyLegalOp<FuncOp>([&](FuncOp op) {
       // A function is legal if all of its non-entry blocks are legal. We
       // don't legalize the entry block (i.e. the function's signature)
@@ -585,12 +588,13 @@ struct LinalgDetensorize : public LinalgDetensorizeBase<LinalgDetensorize> {
     populateBranchOpInterfaceTypeConversionPattern(patterns, typeConverter,
                                                    shouldConvertBranchOperand);
 
-    if (failed(applyFullConversion(getFunction(), target, std::move(patterns))))
+    if (failed(
+            applyFullConversion(getOperation(), target, std::move(patterns))))
       signalPassFailure();
 
     RewritePatternSet canonPatterns(context);
     canonPatterns.add<ExtractFromReshapeFromElements>(context);
-    if (failed(applyPatternsAndFoldGreedily(getFunction(),
+    if (failed(applyPatternsAndFoldGreedily(getOperation(),
                                             std::move(canonPatterns))))
       signalPassFailure();
   }
