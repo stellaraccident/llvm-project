@@ -27,6 +27,15 @@ def MLProgram_Dialect : Dialect {
     it is recommended to inquire further prior to using this dialect.
   }];
 
+  let extraClassDeclaration = [{
+  private:
+    Attribute parseAttribute(DialectAsmParser& parser, Type type) const override;
+    void printAttribute(Attribute attr, DialectAsmPrinter& p) const override;
+
+  public:
+  }];
+
+  let useDefaultAttributePrinterParser = 1;
   let emitAccessorPrefix = kEmitAccessorPrefix_Prefixed;
 }
 
