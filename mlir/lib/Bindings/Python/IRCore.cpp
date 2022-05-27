@@ -16,7 +16,7 @@
 #include "mlir-c/BuiltinTypes.h"
 #include "mlir-c/Debug.h"
 #include "mlir-c/IR.h"
-#include "mlir-c/Registration.h"
+//#include "mlir-c/Registration.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 
@@ -474,7 +474,7 @@ py::object PyMlirContext::createFromCapsule(py::object capsule) {
 
 PyMlirContext *PyMlirContext::createNewContextForInit() {
   MlirContext context = mlirContextCreate();
-  mlirRegisterAllDialects(context);
+  // mlirRegisterAllDialects(context);
   return new PyMlirContext(context);
 }
 

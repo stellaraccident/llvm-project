@@ -102,6 +102,8 @@ private:
   /// in order for repeat lookups of the OpView classes to only incur the cost
   /// of one hashtable lookup.
   llvm::StringMap<pybind11::object> rawOpViewClassMapCache;
+
+  llvm::SmallVector<pybind11::object>
 };
 
 } // namespace python

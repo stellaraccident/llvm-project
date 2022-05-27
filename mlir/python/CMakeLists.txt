@@ -238,7 +238,6 @@ declare_mlir_python_extension(MLIRPythonExtension.Core
     MLIRCAPIDebug
     MLIRCAPIIR
     MLIRCAPIInterfaces
-    MLIRCAPIRegistration  # TODO: See about dis-aggregating
 
     # Dialects
     MLIRCAPIFunc

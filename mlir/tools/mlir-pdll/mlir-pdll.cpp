@@ -114,6 +114,11 @@ int main(int argc, char **argv) {
   // options as static variables.. some of which overlap with our options.
   llvm::cl::ResetCommandLineParser();
 
+  // The tablegen main and CMake rules add this flag so we must accept it.
+  llvm::cl::opt<bool> noWarnOnUnusedTemplateArg(
+      "no-warn-on-unused-template-args",
+      llvm::cl::desc("Disable unused template argument warnings."));
+
   llvm::cl::opt<std::string> inputFilename(
       llvm::cl::Positional, llvm::cl::desc("<input file>"), llvm::cl::init("-"),
       llvm::cl::value_desc("filename"));
